@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>书签管理器原型图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 桌面容器 */
+        .desktop {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            margin-left: 60px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="%23ffffff" stroke-width="0.5" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+        }
+
+        /* 屏幕切换按钮 */
+        .screen-switch {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 1000;
+        }
+
+        .screen-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .screen-dot.active {
+            background: #ffffff;
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .screen-dot:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* 屏幕容器 */
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .screen.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* 桌面图标 */
+        .desktop-icon {
+            position: absolute;
+            width: 80px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        /* 删除小叉样式 */
+        .desktop-icon .delete-cross {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 16px;
+            height: 16px;
+            background: #ff4444;
+            color: white;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .desktop-icon .delete-cross:hover {
+            background: #ff6666;
+            transform: scale(1.1);
+        }
+
+        /* 显示删除模式时显示小叉 */
+        .delete-mode .desktop-icon .delete-cross {
+            display: flex;
+        }
+
+        .delete-mode .desktop-icon {
+            cursor: default;
+        }
+
+        /* 删除动画 */
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
+
+        .desktop-icon:hover {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .desktop-icon:active {
+            transform: scale(0.95);
+        }
+
+        .icon-image {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 8px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .icon-label {
+            color: white;
+            font-size: 12px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+            word-wrap: break-word;
+            line-height: 1.2;
+        }
+
+        .desktop-icon.dragging {
+            opacity: 0.7;
+            transform: scale(1.05);
+            z-index: 100;
+        }
+
+        /* 左侧工具栏 */
+        .toolbar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            z-index: 1000;
+        }
+
+        .tool-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .tool-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        /* 添加书签弹窗 */
+        .add-bookmark-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 400px;
+            display: none;
+            z-index: 2000;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 1500;
+        }
+
+        .modal-overlay.active {
+            display: block;
+        }
+
+        .modal-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        /* URL输入组布局 */
+        .url-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .url-input-group .form-input {
+            flex: 1;
+        }
+
+        /* Favicon预览样式 */
+        .favicon-preview {
+            margin-top: 8px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .favicon-preview img {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+        }
+
+        .favicon-preview span {
+            flex: 1;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .favicon-preview.loading {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+        }
+
+        .favicon-preview.success {
+            background: #d1edff;
+            border-color: #b8daff;
+        }
+
+        .favicon-preview.error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        /* Emoji选择器样式 */
+        .emoji-selector {
+            margin-top: 10px;
+        }
+
+        .emoji-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .emoji-option {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 18px;
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+
+        .emoji-option:hover {
+            background: #e3f2fd;
+            transform: scale(1.1);
+            border-color: #2196f3;
+        }
+
+        .emoji-option.selected {
+            background: #2196f3;
+            border-color: #1976d2;
+            transform: scale(1.1);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .desktop {
+                margin-left: 50px;
+            }
+            
+            .desktop-icon {
+                width: 60px;
+            }
+            
+            .icon-image {
+                width: 36px;
+                height: 36px;
+                font-size: 18px;
+            }
+            
+            .toolbar {
+                width: 50px;
+            }
+            
+            .tool-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 14px;
+            }
+            
+            .screen-switch {
+                right: 10px;
+                gap: 10px;
+            }
+            
+            .screen-dot {
+                width: 16px;
+                height: 16px;
+            }
+            
+            .page-indicator {
+                left: 70px;
+            }
+        }
+
+        /* 页面指示器 */
+        .page-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 80px;
+            transform: none;
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .page-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .page-dot.active {
+            background: white;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- 桌面背景 -->
+    <div class="desktop" id="desktop">
+        <!-- 屏幕1 -->
+        <div class="screen active" data-screen="0">
+            <!-- 第一屏图标 -->
+            <div class="desktop-icon" style="top: 20px; left: 20px;" data-url="https://www.google.com" data-id="icon_default_1">
+                <div class="delete-cross" onclick="deleteIcon(this)">×</div>
+                <div class="icon-image" style="background: linear-gradient(135deg, #4285f4, #34a853);">🌐</div>
+                <div class="icon-label">Google</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 20px; left: 120px;" data-url="https://github.com">
+                <div class="delete-cross" onclick="deleteIcon(this)">×</div>
+                <div class="icon-image" style="background: linear-gradient(135deg, #333, #666);">💻</div>
+                <div class="icon-label">GitHub</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 20px; left: 220px;" data-url="https://stackoverflow.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #f48024, #da5b0b);">❓</div>
+                <div class="icon-label">Stack Overflow</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 20px;" data-url="https://youtube.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ff0000, #cc0000);">📺</div>
+                <div class="icon-label">YouTube</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 120px;" data-url="https://twitter.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #1da1f2, #0d8bd9);">🐦</div>
+                <div class="icon-label">Twitter</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 220px;" data-url="https://linkedin.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #0077b5, #005885);">💼</div>
+                <div class="icon-label">LinkedIn</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 20px;" data-url="https://figma.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #f24e1e, #a259ff);">🎨</div>
+                <div class="icon-label">Figma</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 120px;" data-url="https://notion.so">
+                <div class="icon-image" style="background: linear-gradient(135deg, #000000, #37352f);">📝</div>
+                <div class="icon-label">Notion</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 20px;" data-url="https://facebook.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #1877f2, #42a5f5);">👥</div>
+                <div class="icon-label">Facebook</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 120px;" data-url="https://instagram.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #e4405f, #fd5949);">📸</div>
+                <div class="icon-label">Instagram</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 220px;" data-url="https://whatsapp.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #25d366, #128c7e);">💬</div>
+                <div class="icon-label">WhatsApp</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 420px; left: 20px;" data-url="https://taobao.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ff6600, #ff4500);">🛍️</div>
+                <div class="icon-label">淘宝</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 420px; left: 120px;" data-url="https://baidu.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #2932e1, #0066cc);">🔍</div>
+                <div class="icon-label">百度</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 420px; left: 220px;" data-url="https://weibo.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #e6162d, #c71c30);">📱</div>
+                <div class="icon-label">微博</div>
+            </div>
+        </div>
+
+        <!-- 屏幕2 -->
+        <div class="screen" data-screen="1">
+            <div class="desktop-icon" style="top: 20px; left: 20px;" data-url="https://netflix.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #e50914, #b20710);">🎬</div>
+                <div class="icon-label">Netflix</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 20px; left: 120px;" data-url="https://spotify.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #1db954, #1ed760);">🎵</div>
+                <div class="icon-label">Spotify</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 20px; left: 220px;" data-url="https://amazon.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ff9900, #e68a00);">🛒</div>
+                <div class="icon-label">Amazon</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 20px;" data-url="https://discord.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #7289da, #5b6eae);">💬</div>
+                <div class="icon-label">Discord</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 120px;" data-url="https://twitch.tv">
+                <div class="icon-image" style="background: linear-gradient(135deg, #9146ff, #772ce8);">🎮</div>
+                <div class="icon-label">Twitch</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 220px;" data-url="https://reddit.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ff4500, #ff5700);">🤖</div>
+                <div class="icon-label">Reddit</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 20px;" data-url="https://pinterest.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #bd081c, #e60023);">📌</div>
+                <div class="icon-label">Pinterest</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 120px;" data-url="https://snapchat.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #fffc00, #ffcc00);">👻</div>
+                <div class="icon-label">Snapchat</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 220px;" data-url="https://tiktok.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ff0050, #00f2ea);">🎵</div>
+                <div class="icon-label">TikTok</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 20px;" data-url="https://zoom.us">
+                <div class="icon-image" style="background: linear-gradient(135deg, #2d8cff, #0078d4);">🎥</div>
+                <div class="icon-label">Zoom</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 120px;" data-url="https://skype.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #00aff0, #0078d4);">📞</div>
+                <div class="icon-label">Skype</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 220px;" data-url="https://paypal.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #003087, #009cde);">💳</div>
+                <div class="icon-label">PayPal</div>
+            </div>
+        </div>
+
+        <!-- 屏幕3 -->
+        <div class="screen" data-screen="2">
+            <div class="desktop-icon" style="top: 20px; left: 20px;" data-url="https://adobe.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ff0000, #cc0000);">📷</div>
+                <div class="icon-label">Adobe</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 20px; left: 120px;" data-url="https://canva.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #00c4cc, #00b4d8);">✨</div>
+                <div class="icon-label">Canva</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 20px; left: 220px;" data-url="https://trello.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #0079bf, #0052cc);">📋</div>
+                <div class="icon-label">Trello</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 20px;" data-url="https://slack.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #4a154b, #611f69);">💬</div>
+                <div class="icon-label">Slack</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 120px; left: 120px;" data-url="https://dropbox.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #0061ff, #0ea5e9);">☁️</div>
+                <div class="icon-label">Dropbox</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 20px;" data-url="https://figma.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #f24e1e, #a259ff);">🎨</div>
+                <div class="icon-label">Figma</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 120px;" data-url="https://behance.net">
+                <div class="icon-image" style="background: linear-gradient(135deg, #1769ff, #0d47a1);">🎨</div>
+                <div class="icon-label">Behance</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 220px; left: 220px;" data-url="https://dribbble.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #ea4c89, #d6336c);">🏀</div>
+                <div class="icon-label">Dribbble</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 20px;" data-url="https://wordpress.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #21759b, #1e88e5);">✍️</div>
+                <div class="icon-label">WordPress</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 120px;" data-url="https://medium.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #00ab6c, #00cc88);">📰</div>
+                <div class="icon-label">Medium</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 320px; left: 220px;" data-url="https://coursera.org">
+                <div class="icon-image" style="background: linear-gradient(135deg, #0056d3, #1f7ae0);">🎓</div>
+                <div class="icon-label">Coursera</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 420px; left: 20px;" data-url="https://khanacademy.org">
+                <div class="icon-image" style="background: linear-gradient(135deg, #14bf96, #00a085);">🧠</div>
+                <div class="icon-label">Khan Academy</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 420px; left: 120px;" data-url="https://duolingo.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #58cc02, #89e219);">🦉</div>
+                <div class="icon-label">Duolingo</div>
+            </div>
+            
+            <div class="desktop-icon" style="top: 420px; left: 220px;" data-url="https://Udemy.com">
+                <div class="icon-image" style="background: linear-gradient(135deg, #a435f0, #7b22d3);">💻</div>
+                <div class="icon-label">Udemy</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 屏幕切换点 -->
+    <div class="screen-switch">
+        <div class="screen-dot active" data-screen="0"></div>
+        <div class="screen-dot" data-screen="1"></div>
+        <div class="screen-dot" data-screen="2"></div>
+    </div>
+
+    <!-- 页面指示器 -->
+    <div class="page-indicator">
+        <div class="page-dot active"></div>
+        <div class="page-dot"></div>
+        <div class="page-dot"></div>
+    </div>
+
+    <!-- 底部工具栏 -->
+    <div class="toolbar">
+        <button class="tool-btn" onclick="addBookmark()" title="添加书签">
+            ➕
+        </button>
+        <button class="tool-btn" id="deleteModeBtn" onclick="toggleDeleteMode()" title="删除书签" style="display: none;">
+            ➖
+        </button>
+
+        <button class="tool-btn" onclick="resetLayout()" title="重置布局">
+            🔄
+        </button>
+        <button class="tool-btn" onclick="help()" title="帮助">
+            ❓
+        </button>
+    </div>
+
+    <!-- 拖拽指示器 -->
+    <div class="drag-indicator" id="dragIndicator"></div>
+
+    <!-- 添加书签弹窗 -->
+    <div class="modal-overlay" id="modalOverlay"></div>
+    <div class="add-bookmark-modal" id="addBookmarkModal">
+        <div class="modal-header">添加新书签</div>
+        <div class="form-group">
+            <label class="form-label">网站名称</label>
+            <input type="text" class="form-input" id="bookmarkName" placeholder="输入网站名称">
+        </div>
+        <div class="form-group">
+            <label class="form-label">网站地址</label>
+            <div class="url-input-group">
+                <input type="url" class="form-input" id="bookmarkUrl" placeholder="https://example.com">
+                <button type="button" class="btn btn-small" onclick="fetchFavicon()">获取网站的图标</button>
+            </div>
+            <div class="favicon-preview" id="faviconPreview" style="display: none;">
+                <img id="faviconImage" src="" alt="网站图标">
+                <span id="faviconDomain"></span>
+                <button type="button" class="btn btn-small" onclick="useFavicon()">使用此图标</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">选择图标（Emoji）</label>
+            <div class="emoji-selector">
+                <div class="emoji-options">
+                    <span class="emoji-option" data-emoji="🌐">🌐</span>
+                    <span class="emoji-option" data-emoji="💻">💻</span>
+                    <span class="emoji-option" data-emoji="📱">📱</span>
+                    <span class="emoji-option" data-emoji="🎨">🎨</span>
+                    <span class="emoji-option" data-emoji="📝">📝</span>
+                    <span class="emoji-option" data-emoji="🎬">🎬</span>
+                    <span class="emoji-option" data-emoji="🎵">🎵</span>
+                    <span class="emoji-option" data-emoji="📚">📚</span>
+                    <span class="emoji-option" data-emoji="🛒">🛒</span>
+                    <span class="emoji-option" data-emoji="💬">💬</span>
+                    <span class="emoji-option" data-emoji="🎮">🎮</span>
+                    <span class="emoji-option" data-emoji="📷">📷</span>
+                    <span class="emoji-option" data-emoji="✈️">✈️</span>
+                    <span class="emoji-option" data-emoji="🍕">🍕</span>
+                    <span class="emoji-option" data-emoji="⚽">⚽</span>
+                    <span class="emoji-option" data-emoji="🎓">🎓</span>
+                </div>
+                <input type="text" class="form-input" id="bookmarkIcon" placeholder="🌐" maxlength="2">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeAddBookmark()">取消</button>
+            <button class="btn btn-primary" onclick="saveBookmark()">添加</button>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentScreen = 0;
+        let dragState = {
+            isDragging: false,
+            draggedElement: null,
+            originalPosition: null,
+            originalScreen: null
+        };
+        let clickTimer = null;
+        let clickCount = 0;
+        let lastClickedElement = null;
+
+        // Google Favicon API相关的全局变量
+        let currentFaviconData = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            updateIndicators();
+            
+            // 尝试加载保存的配置
+            const loaded = loadDesktopConfig();
+            
+            if (!loaded) {
+                console.log('使用默认配置');
+                // 如果没有保存的配置，确保删除小叉正确显示
+                addDeleteCrossesToIcons();
+            }
+        });
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 屏幕切换
+            document.querySelectorAll('.screen-dot').forEach((dot, index) => {
+                dot.addEventListener('click', () => switchScreen(index));
+            });
+
+            // 图标点击
+            document.querySelectorAll('.desktop-icon').forEach(icon => {
+                icon.addEventListener('click', handleIconClick);
+                setupDragEvents(icon);
+            });
+
+            // 键盘事件
+            document.addEventListener('keydown', handleKeyboard);
+            
+            // 模态框关闭
+            document.getElementById('modalOverlay').addEventListener('click', closeAddBookmark);
+            
+            // Emoji选择器
+            setupEmojiSelector();
+            
+            // 为现有图标添加删除小叉
+            addDeleteCrossesToIcons();
+        }
+
+        // 为所有图标添加删除小叉
+        function addDeleteCrossesToIcons() {
+            document.querySelectorAll('.desktop-icon').forEach(icon => {
+                if (!icon.querySelector('.delete-cross')) {
+                    const deleteCross = document.createElement('div');
+                    deleteCross.className = 'delete-cross';
+                    deleteCross.textContent = '×';
+                    deleteCross.onclick = function(e) {
+                        e.stopPropagation();
+                        deleteIcon(this);
+                    };
+                    icon.insertBefore(deleteCross, icon.firstChild);
+                }
+            });
+        }
+
+        // 切换删除模式
+        let deleteMode = false;
+        function toggleDeleteMode() {
+            deleteMode = !deleteMode;
+            const desktop = document.getElementById('desktop');
+            const deleteBtn = document.getElementById('deleteModeBtn');
+            
+            if (deleteMode) {
+                desktop.classList.add('delete-mode');
+                deleteBtn.style.display = 'block';
+                deleteBtn.innerHTML = '✅';
+                deleteBtn.title = '退出删除模式';
+            } else {
+                desktop.classList.remove('delete-mode');
+                deleteBtn.innerHTML = '➖';
+                deleteBtn.title = '删除书签';
+            }
+        }
+
+        // 删除图标函数
+        function deleteIcon(deleteCrossElement) {
+            const icon = deleteCrossElement.parentElement;
+            icon.style.animation = 'fadeOut 0.2s ease';
+            setTimeout(() => {
+                icon.remove();
+                
+                // 保存配置
+                saveDesktopConfig();
+            }, 200);
+        }
+
+        // 添加删除按钮到初始显示
+        document.addEventListener('DOMContentLoaded', function() {
+            // 延迟显示删除按钮，确保DOM加载完成
+            setTimeout(() => {
+                const deleteBtn = document.getElementById('deleteModeBtn');
+                if (deleteBtn) {
+                    deleteBtn.style.display = 'block';
+                }
+            }, 100);
+        });
+
+        // 屏幕切换
+        function switchScreen(screenIndex) {
+            // 隐藏当前屏幕
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // 显示目标屏幕
+            document.querySelector(`[data-screen="${screenIndex}"]`).classList.add('active');
+            
+            // 更新指示器
+            document.querySelectorAll('.screen-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === screenIndex);
+            });
+            
+            document.querySelectorAll('.page-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === screenIndex);
+            });
+            
+            currentScreen = screenIndex;
+        }
+
+        // 图标点击处理（双击打开）
+        function handleIconClick(event) {
+            const currentElement = event.currentTarget;
+            
+            // 清除之前的定时器
+            if (clickTimer) {
+                clearTimeout(clickTimer);
+                clickTimer = null;
+            }
+            
+            // 检查是否是同一个元素的连续点击
+            if (lastClickedElement === currentElement) {
+                clickCount++;
+            } else {
+                clickCount = 1;
+                lastClickedElement = currentElement;
+            }
+            
+            // 如果是双击
+            if (clickCount === 2) {
+                // 清除定时器和计数
+                clearTimeout(clickTimer);
+                clickTimer = null;
+                clickCount = 0;
+                lastClickedElement = null;
+                
+                // 打开网址
+                const url = currentElement.dataset.url;
+                if (url) {
+                    // 使用通用URL处理函数确保正确访问
+                    const fullUrl = normalizeUrl(url);
+                    window.open(fullUrl, '_blank');
+                }
+            } else {
+                // 设置定时器，如果300ms内没有第二次点击，则认为是单击
+                clickTimer = setTimeout(() => {
+                    clickCount = 0;
+                    lastClickedElement = null;
+                    clickTimer = null;
+                }, 300);
+            }
+        }
+
+        // 拖拽功能设置
+        function setupDragEvents(element) {
+            element.addEventListener('mousedown', startDrag);
+            element.addEventListener('touchstart', startDrag);
+        }
+
+        // 开始拖拽
+        function startDrag(event) {
+            event.preventDefault();
+            const element = event.currentTarget;
+            
+            dragState.isDragging = true;
+            dragState.draggedElement = element;
+            dragState.originalPosition = {
+                left: element.style.left,
+                top: element.style.top
+            };
+            
+            // 记录原始屏幕
+            dragState.originalScreen = currentScreen;
+            
+            element.classList.add('dragging');
+            
+            // 添加事件监听器
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchmove', drag);
+            document.addEventListener('touchend', endDrag);
+        }
+
+        // 拖拽过程
+        function drag(event) {
+            if (!dragState.isDragging) return;
+            
+            const draggedElement = dragState.draggedElement;
+            const rect = draggedElement.getBoundingClientRect();
+            const desktopRect = document.getElementById('desktop').getBoundingClientRect();
+            
+            let clientX, clientY;
+            if (event.type === 'touchmove') {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            
+            const newLeft = Math.max(0, Math.min(clientX - desktopRect.left - rect.width / 2, desktopRect.width - rect.width));
+            const newTop = Math.max(0, Math.min(clientY - desktopRect.top - rect.height / 2, desktopRect.height - rect.height));
+            
+            draggedElement.style.left = newLeft + 'px';
+            draggedElement.style.top = newTop + 'px';
+            
+            // 检测是否悬停在屏幕切换按钮上
+            checkScreenSwitch(clientX, clientY);
+        }
+        
+        // 检测屏幕切换
+        function checkScreenSwitch(mouseX, mouseY) {
+            const screenDots = document.querySelectorAll('.screen-dot');
+            
+            for (let i = 0; i < screenDots.length; i++) {
+                const dot = screenDots[i];
+                const dotRect = dot.getBoundingClientRect();
+                
+                // 检测鼠标是否在圆点区域内
+                if (mouseX >= dotRect.left && mouseX <= dotRect.right && 
+                    mouseY >= dotRect.top && mouseY <= dotRect.bottom) {
+                    
+                    // 如果不是当前屏幕，则切换
+                    if (i !== currentScreen) {
+                        // 临时切换屏幕
+                        switchScreen(i);
+                        
+                        // 移动图标到新屏幕
+                        moveIconToScreen(dragState.draggedElement, dragState.originalScreen, i);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 移动图标到指定屏幕
+        function moveIconToScreen(icon, fromScreen, toScreen) {
+            // 从原始屏幕移除
+            const originalScreen = document.querySelector(`[data-screen="${fromScreen}"]`);
+            if (originalScreen && originalScreen.contains(icon)) {
+                originalScreen.removeChild(icon);
+            }
+            
+            // 添加到目标屏幕
+            const targetScreen = document.querySelector(`[data-screen="${toScreen}"]`);
+            if (targetScreen) {
+                targetScreen.appendChild(icon);
+                
+                // 随机定位到目标屏幕的新位置
+                const screenRect = targetScreen.getBoundingClientRect();
+                const iconWidth = 80; // 假设图标宽度
+                const iconHeight = 100; // 假设图标高度
+                
+                const randomLeft = Math.random() * (screenRect.width - iconWidth);
+                const randomTop = Math.random() * (screenRect.height - iconHeight);
+                
+                icon.style.left = randomLeft + 'px';
+                icon.style.top = randomTop + 'px';
+            }
+        }
+
+        // 结束拖拽
+        function endDrag() {
+            if (!dragState.isDragging) return;
+            
+            const draggedElement = dragState.draggedElement;
+            draggedElement.classList.remove('dragging');
+            
+            // 防重叠逻辑 - 像手机屏幕一样
+            const finalPosition = findNonOverlappingPosition(draggedElement);
+            
+            // 应用最终位置
+            draggedElement.style.left = finalPosition.left + 'px';
+            draggedElement.style.top = finalPosition.top + 'px';
+            
+            // 保持拖拽状态一会儿，避免触发点击事件
+            const finishedElement = dragState.draggedElement;
+            
+            dragState.isDragging = false;
+            dragState.draggedElement = null;
+            dragState.originalPosition = null;
+            
+            // 移除事件监听器
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', endDrag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('touchend', endDrag);
+            
+            // 保存配置
+            setTimeout(() => {
+                saveDesktopConfig();
+            }, 100);
+        }
+
+        // 网格系统配置
+        const GRID_SIZE = 100; // 网格大小
+        const GRID_OFFSET_X = 20; // 网格起始X偏移
+        const GRID_OFFSET_Y = 20; // 网格起始Y偏移
+        
+        // 寻找不重叠的位置（类似手机屏幕，使用网格对齐）
+        function findNonOverlappingPosition(draggedElement) {
+            const currentScreenElement = document.querySelector(`[data-screen="${currentScreen}"]`);
+            const screenRect = currentScreenElement.getBoundingClientRect();
+            const iconRect = draggedElement.getBoundingClientRect();
+            
+            // 获取当前拖拽的位置并对齐到网格
+            let currentLeft = parseInt(draggedElement.style.left) || iconRect.left - screenRect.left;
+            let currentTop = parseInt(draggedElement.style.top) || iconRect.top - screenRect.top;
+            
+            // 对齐到网格
+            currentLeft = snapToGrid(currentLeft);
+            currentTop = snapToGrid(currentTop);
+            
+            // 检查是否与现有图标重叠
+            if (!hasOverlap(draggedElement, currentLeft, currentTop)) {
+                return { left: currentLeft, top: currentTop };
+            }
+            
+            // 如果有重叠，尝试寻找附近的网格位置
+            const nearbyPosition = findNearestAvailableGridPosition(draggedElement, currentLeft, currentTop);
+            if (nearbyPosition) {
+                return nearbyPosition;
+            }
+            
+            // 如果附近没有网格位置，选择一个随机网格位置
+            return getRandomGridPosition(draggedElement);
+        }
+
+        // 将位置对齐到网格
+        function snapToGrid(value) {
+            return Math.round((value - GRID_OFFSET_X) / GRID_SIZE) * GRID_SIZE + GRID_OFFSET_X;
+        }
+
+        // 获取所有可用的网格位置
+        function getAllGridPositions() {
+            const positions = [];
+            const maxCols = 7; // 屏幕宽度约700px，每格100px
+            const maxRows = 5; // 屏幕高度约500px，每格100px
+            
+            for (let row = 0; row < maxRows; row++) {
+                for (let col = 0; col < maxCols; col++) {
+                    const left = GRID_OFFSET_X + col * GRID_SIZE;
+                    const top = GRID_OFFSET_Y + row * GRID_SIZE;
+                    positions.push({ left, top });
+                }
+            }
+            return positions;
+        }
+
+        // 寻找最近的可用网格位置
+        function findNearestAvailableGridPosition(draggedElement, originalLeft, originalTop) {
+            const allGridPositions = getAllGridPositions();
+            const availablePositions = allGridPositions.filter(pos => 
+                !hasOverlap(draggedElement, pos.left, pos.top)
+            );
+            
+            if (availablePositions.length === 0) return null;
+            
+            // 计算距离，找到最近的
+            let nearestPos = null;
+            let minDistance = Infinity;
+            
+            for (let pos of availablePositions) {
+                const distance = Math.sqrt(
+                    Math.pow(pos.left - originalLeft, 2) + 
+                    Math.pow(pos.top - originalTop, 2)
+                );
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestPos = pos;
+                }
+            }
+            
+            return nearestPos;
+        }
+
+        // 获取随机网格位置
+        function getRandomGridPosition(draggedElement) {
+            const allGridPositions = getAllGridPositions();
+            const availablePositions = allGridPositions.filter(pos => 
+                !hasOverlap(draggedElement, pos.left, pos.top)
+            );
+            
+            if (availablePositions.length > 0) {
+                return availablePositions[Math.floor(Math.random() * availablePositions.length)];
+            }
+            
+            // 如果没有可用位置，返回中心位置
+            return { left: 250, top: 150 };
+        }
+
+        // 检查是否有重叠
+        function hasOverlap(element, left, top) {
+            const currentScreenElement = document.querySelector(`[data-screen="${currentScreen}"]`);
+            const allIcons = currentScreenElement.querySelectorAll('.desktop-icon');
+            
+            const elementRect = {
+                left: left,
+                top: top,
+                right: left + 80,
+                bottom: top + 90
+            };
+            
+            for (let icon of allIcons) {
+                if (icon === element) continue;
+                
+                const iconLeft = parseInt(icon.style.left) || 0;
+                const iconTop = parseInt(icon.style.top) || 0;
+                
+                const iconRect = {
+                    left: iconLeft,
+                    top: iconTop,
+                    right: iconLeft + 80,
+                    bottom: iconTop + 90
+                };
+                
+                // 检查矩形是否重叠
+                if (elementRect.left < iconRect.right && 
+                    elementRect.right > iconRect.left &&
+                    elementRect.top < iconRect.bottom && 
+                    elementRect.bottom > iconRect.top) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // 寻找附近可用的位置
+        function findNearestAvailablePosition(draggedElement, originalLeft, originalTop) {
+            const searchRadius = [20, 40, 60, 80, 100]; // 逐渐扩大搜索半径
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: -1 }, { dx: 1, dy: 0 }, { dx: 1, dy: 1 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 1 }, { dx: -1, dy: 0 }, { dx: -1, dy: -1 }
+            ];
+            
+            for (let radius of searchRadius) {
+                for (let dir of directions) {
+                    const newLeft = originalLeft + dir.dx * radius;
+                    const newTop = originalTop + dir.dy * radius;
+                    
+                    // 检查位置是否在屏幕范围内
+                    if (newLeft >= 0 && newTop >= 0 && 
+                        newLeft <= 620 && newTop <= 420) { // 屏幕大小减去图标大小
+                        
+                        // 检查该位置是否可用
+                        if (!hasOverlap(draggedElement, newLeft, newTop)) {
+                            return { left: newLeft, top: newTop };
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        // 获取随机可用位置
+        function getRandomAvailablePosition(draggedElement) {
+            const currentScreenElement = document.querySelector(`[data-screen="${currentScreen}"]`);
+            const screenRect = currentScreenElement.getBoundingClientRect();
+            
+            // 尝试找到随机位置
+            for (let i = 0; i < 50; i++) { // 最多尝试50次
+                const randomLeft = Math.random() * (screenRect.width - 80);
+                const randomTop = Math.random() * (screenRect.height - 90);
+                
+                if (!hasOverlap(draggedElement, randomLeft, randomTop)) {
+                    return { left: randomLeft, top: randomTop };
+                }
+            }
+            
+            // 如果50次都找不到，就放在屏幕中心附近
+            return { left: 250, top: 150 };
+        }
+
+        // 显示拖拽指示器
+        function showDragIndicator(element) {
+            const indicator = document.getElementById('dragIndicator');
+            const rect = element.getBoundingClientRect();
+            const desktopRect = document.getElementById('desktop').getBoundingClientRect();
+            
+            indicator.style.left = (rect.left - desktopRect.left - 5) + 'px';
+            indicator.style.top = (rect.top - desktopRect.top - 5) + 'px';
+            indicator.style.width = (rect.width + 10) + 'px';
+            indicator.style.height = (rect.height + 10) + 'px';
+            indicator.classList.add('active');
+        }
+
+        // 更新拖拽指示器
+        function updateDragIndicator(element) {
+            const indicator = document.getElementById('dragIndicator');
+            const rect = element.getBoundingClientRect();
+            const desktopRect = document.getElementById('desktop').getBoundingClientRect();
+            
+            indicator.style.left = (rect.left - desktopRect.left - 5) + 'px';
+            indicator.style.top = (rect.top - desktopRect.top - 5) + 'px';
+        }
+
+        // 隐藏拖拽指示器
+        function hideDragIndicator() {
+            document.getElementById('dragIndicator').classList.remove('active');
+        }
+
+        // 更新指示器
+        function updateIndicators() {
+            document.querySelectorAll('.screen-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentScreen);
+            });
+            
+            document.querySelectorAll('.page-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentScreen);
+            });
+        }
+
+        // 键盘事件处理
+        function handleKeyboard(event) {
+            switch(event.key) {
+                case 'ArrowLeft':
+                    if (currentScreen > 0) {
+                        switchScreen(currentScreen - 1);
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (currentScreen < 2) {
+                        switchScreen(currentScreen + 1);
+                    }
+                    break;
+                case 'Escape':
+                    closeAddBookmark();
+                    break;
+            }
+        }
+
+        // 添加书签
+        function addBookmark() {
+            document.getElementById('modalOverlay').classList.add('active');
+            document.getElementById('addBookmarkModal').style.display = 'block';
+        }
+
+        // 关闭添加书签弹窗
+        function closeAddBookmark() {
+            document.getElementById('modalOverlay').classList.remove('active');
+            document.getElementById('addBookmarkModal').style.display = 'none';
+            clearForm();
+        }
+
+        // 清空表单
+        function clearForm() {
+            document.getElementById('bookmarkName').value = '';
+            document.getElementById('bookmarkUrl').value = '';
+            document.getElementById('bookmarkIcon').value = '';
+            
+            // 清除emoji选择器的选中状态
+            document.querySelectorAll('.emoji-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // 清除favicon相关数据和预览
+            currentFaviconData = null;
+            showFaviconPreview('hidden');
+        }
+
+        // Emoji选择器事件处理
+        function setupEmojiSelector() {
+            document.querySelectorAll('.emoji-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    // 移除其他选项的选中状态
+                    document.querySelectorAll('.emoji-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    
+                    // 添加选中状态到当前选项
+                    this.classList.add('selected');
+                    
+                    // 更新输入框的值
+                    document.getElementById('bookmarkIcon').value = this.dataset.emoji;
+                });
+            });
+        }
+
+        // 标准化URL格式，确保可以正确访问
+        function normalizeUrl(url) {
+            if (!url) return '';
+            
+            // 移除多余空格
+            url = url.trim();
+            
+            // 如果URL已经包含协议前缀，直接返回
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                return url;
+            }
+            
+            // 如果是IP地址或localhost，直接添加https
+            if (url.startsWith('localhost') || 
+                url.startsWith('127.0.0.1') ||
+                /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(url)) {
+                return 'http://' + url;
+            }
+            
+            // 默认使用https协议
+            return 'https://' + url;
+        }
+
+        // 从URL提取域名
+        function extractDomain(url) {
+            if (!url) return '';
+            
+            // 使用标准化URL处理
+            url = normalizeUrl(url);
+            
+            try {
+                const urlObj = new URL(url);
+                return urlObj.hostname;
+            } catch (error) {
+                console.error('URL格式错误:', url);
+                return '';
+            }
+        }
+
+        // 通过Google Favicon API获取网站的favicon
+        function fetchFavicon() {
+            const urlInput = document.getElementById('bookmarkUrl').value.trim();
+            
+            if (!urlInput) {
+                alert('请先输入网站地址');
+                return;
+            }
+            
+            // 使用标准化URL处理
+            const normalizedUrl = normalizeUrl(urlInput);
+            const domain = extractDomain(normalizedUrl);
+            if (!domain) {
+                alert('请输入正确的网站地址');
+                return;
+            }
+            
+            // 显示加载状态
+            showFaviconPreview('loading');
+            
+            // 使用Google Favicon API
+            const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+            
+            // 测试图片加载
+            const img = new Image();
+            img.onload = function() {
+                // 图片加载成功
+                currentFaviconData = {
+                    iconUrl: faviconUrl,
+                    domain: domain,
+                    originalUrl: urlInput,
+                    success: true
+                };
+                
+                updateFaviconPreview(faviconUrl, domain);
+                showFaviconPreview('success');
+                console.log('成功获取favicon:', faviconUrl);
+            };
+            
+            img.onerror = function() {
+                // 图片加载失败
+                console.error('获取favicon失败');
+                currentFaviconData = {
+                    success: false,
+                    error: '无法获取网站图标'
+                };
+                showFaviconPreview('error', '无法获取网站图标，请手动选择Emoji');
+            };
+            
+            // 设置超时
+            setTimeout(() => {
+                if (currentFaviconData && !currentFaviconData.success) {
+                    showFaviconPreview('error', '获取图标超时，请检查网络连接');
+                }
+            }, 5000);
+            
+            // 开始加载图片
+            img.src = faviconUrl;
+        }
+
+        // 显示favicon预览
+        function showFaviconPreview(status, errorMessage = '') {
+            const preview = document.getElementById('faviconPreview');
+            const domainSpan = document.getElementById('faviconDomain');
+            
+            // 移除所有状态类
+            preview.classList.remove('loading', 'success', 'error');
+            
+            switch (status) {
+                case 'loading':
+                    preview.classList.add('loading');
+                    preview.style.display = 'flex';
+                    domainSpan.textContent = '正在获取图标...';
+                    break;
+                case 'success':
+                    preview.classList.add('success');
+                    preview.style.display = 'flex';
+                    break;
+                case 'error':
+                    preview.classList.add('error');
+                    preview.style.display = 'flex';
+                    domainSpan.textContent = errorMessage || '获取图标失败';
+                    break;
+                case 'hidden':
+                default:
+                    preview.style.display = 'none';
+                    break;
+            }
+        }
+
+        // 更新favicon预览内容
+        function updateFaviconPreview(imageUrl, domain) {
+            const img = document.getElementById('faviconImage');
+            const domainSpan = document.getElementById('faviconDomain');
+            
+            img.src = imageUrl;
+            img.alt = domain;
+            domainSpan.textContent = domain;
+        }
+
+        // 使用favicon作为图标
+        function useFavicon() {
+            if (!currentFaviconData) {
+                alert('请先获取网站图标');
+                return;
+            }
+            
+            // 创建一个特殊的favicon图标数据
+            const faviconIcon = {
+                type: 'favicon',
+                url: currentFaviconData.url,
+                domain: currentFaviconData.domain
+            };
+            
+            // 将favicon数据存储到隐藏字段
+            const iconInput = document.getElementById('bookmarkIcon');
+            iconInput.value = JSON.stringify(faviconIcon);
+            
+            // 清除emoji选择器的选中状态
+            document.querySelectorAll('.emoji-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // 显示提示
+            showFaviconPreview('success');
+            alert('已选择使用网站图标！添加书签后将显示网站的真实图标。');
+            
+            console.log('选择使用favicon:', currentFaviconData);
+        }
+
+        // 保存书签
+        function saveBookmark() {
+            const name = document.getElementById('bookmarkName').value.trim();
+            const url = document.getElementById('bookmarkUrl').value.trim();
+            const icon = document.getElementById('bookmarkIcon').value.trim() || '🌐';
+            
+            if (name && url) {
+                const currentScreenElement = document.querySelector(`[data-screen="${currentScreen}"]`);
+                
+                // 确定使用的图标类型
+                const useFavicon = currentFaviconData && currentFaviconData.success;
+                const iconData = useFavicon ? currentFaviconData.iconUrl : icon;
+                const iconType = useFavicon ? 'favicon' : 'emoji';
+                
+                // 获取随机网格位置
+                const tempIcon = createNewIcon(name, url, iconData, iconType);
+                const position = getRandomGridPosition(tempIcon);
+                
+                // 创建新图标并设置位置
+                const newIcon = createNewIconWithPosition(name, url, iconData, position.left, position.top, iconType);
+                
+                // 添加到当前屏幕
+                currentScreenElement.appendChild(newIcon);
+                
+                // 为新图标添加事件监听
+                setupDragEvents(newIcon);
+                newIcon.addEventListener('click', handleIconClick);
+                
+                console.log('添加书签:', { name, url, icon: iconData, iconType, screen: currentScreen });
+                alert('书签添加成功！');
+                closeAddBookmark();
+                
+                // 保存配置
+                saveDesktopConfig();
+            } else {
+                alert('请填写完整的书签信息');
+            }
+        }
+
+        // 创建新图标（临时版本，不设置位置）
+        function createNewIcon(name, url, iconEmoji, iconType = 'emoji') {
+            const icon = document.createElement('div');
+            icon.className = 'desktop-icon';
+            icon.setAttribute('data-url', url);
+            icon.setAttribute('data-icon-type', iconType);
+            
+            // 创建删除小叉
+            const deleteCross = document.createElement('div');
+            deleteCross.className = 'delete-cross';
+            deleteCross.textContent = '×';
+            deleteCross.onclick = function(e) {
+                e.stopPropagation();
+                deleteIcon(this);
+            };
+            
+            // 创建图标图片
+            const iconImage = document.createElement('div');
+            iconImage.className = 'icon-image';
+            
+            if (iconType === 'favicon' && iconEmoji.startsWith('http')) {
+                // 使用favicon图片
+                iconImage.style.backgroundImage = `url(${iconEmoji})`;
+                iconImage.style.backgroundSize = 'cover';
+                iconImage.style.backgroundPosition = 'center';
+                iconImage.style.backgroundRepeat = 'no-repeat';
+                iconImage.textContent = ''; // 清空文字内容
+                iconImage.setAttribute('data-favicon-url', iconEmoji);
+            } else {
+                // 使用emoji图标
+                iconImage.style.background = getRandomGradient();
+                iconImage.textContent = iconEmoji;
+            }
+            
+            // 创建标签
+            const iconLabel = document.createElement('div');
+            iconLabel.className = 'icon-label';
+            iconLabel.textContent = name;
+            
+            // 组装图标
+            icon.appendChild(deleteCross);
+            icon.appendChild(iconImage);
+            icon.appendChild(iconLabel);
+            
+            return icon;
+        }
+
+        // 创建新图标（带位置设置）
+        function createNewIconWithPosition(name, url, iconEmoji, left, top, iconType = 'emoji') {
+            const icon = createNewIcon(name, url, iconEmoji, iconType);
+            
+            // 对齐到网格
+            const snappedLeft = snapToGrid(left);
+            const snappedTop = snapToGrid(top);
+            icon.style.left = snappedLeft + 'px';
+            icon.style.top = snappedTop + 'px';
+            
+            return icon;
+        }
+
+        // 获取随机渐变背景
+        function getRandomGradient() {
+            const gradients = [
+                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+                'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)'
+            ];
+            return gradients[Math.floor(Math.random() * gradients.length)];
+        }
+
+
+
+        // 保存桌面配置到本地存储
+        function saveDesktopConfig() {
+            const config = {
+                version: "1.0",
+                timestamp: Date.now(),
+                screens: []
+            };
+            
+            // 遍历所有屏幕收集图标数据
+            document.querySelectorAll('.screen').forEach((screen, screenIndex) => {
+                config.screens[screenIndex] = { icons: [] };
+                
+                screen.querySelectorAll('.desktop-icon').forEach(icon => {
+                    const iconImage = icon.querySelector('.icon-image');
+                    const iconType = icon.dataset.iconType || 'emoji';
+                    
+                    const iconData = {
+                        id: icon.dataset.id || generateUniqueId(),
+                        name: icon.querySelector('.icon-label').textContent,
+                        url: icon.dataset.url,
+                        icon: iconImage.textContent || iconImage.getAttribute('data-favicon-url') || '',
+                        iconType: iconType,
+                        left: parseInt(icon.style.left) || 0,
+                        top: parseInt(icon.style.top) || 0,
+                        background: iconImage.style.background,
+                        faviconUrl: iconImage.getAttribute('data-favicon-url') || '',
+                        deleteCross: icon.querySelector('.delete-cross') !== null
+                    };
+                    
+                    config.screens[screenIndex].icons.push(iconData);
+                });
+            });
+            
+            // 保存到localStorage
+            localStorage.setItem('bookmarkDesktopConfig', JSON.stringify(config));
+            console.log('配置已保存:', config);
+        }
+
+        // 生成唯一ID
+        function generateUniqueId() {
+            return 'icon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // 从本地存储加载配置
+        function loadDesktopConfig() {
+            const savedConfig = localStorage.getItem('bookmarkDesktopConfig');
+            
+            if (!savedConfig) {
+                console.log('没有找到保存的配置，使用默认配置');
+                return false;
+            }
+            
+            try {
+                const config = JSON.parse(savedConfig);
+                applyDesktopConfig(config);
+                console.log('配置已加载:', config);
+                return true;
+            } catch (error) {
+                console.error('加载配置失败:', error);
+                return false;
+            }
+        }
+
+        // 应用配置到页面
+        function applyDesktopConfig(config) {
+            // 先隐藏所有屏幕
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            config.screens.forEach((screenData, screenIndex) => {
+                const screen = document.querySelector(`[data-screen="${screenIndex}"]`);
+                if (!screen) return;
+                
+                // 清空屏幕
+                screen.innerHTML = '';
+                
+                // 重新创建图标
+                screenData.icons.forEach(iconData => {
+                    const icon = createIconFromData(iconData);
+                    screen.appendChild(icon);
+                    setupDragEvents(icon);
+                    icon.addEventListener('click', handleIconClick);
+                });
+            });
+            
+            // 恢复当前屏幕状态
+            switchScreen(currentScreen);
+        }
+
+        // 从数据创建图标
+        function createIconFromData(iconData) {
+            const icon = document.createElement('div');
+            icon.className = 'desktop-icon';
+            icon.setAttribute('data-url', iconData.url);
+            icon.setAttribute('data-id', iconData.id);
+            if (iconData.iconType) {
+                icon.setAttribute('data-icon-type', iconData.iconType);
+            }
+            
+            // 创建删除小叉
+            if (iconData.deleteCross) {
+                const deleteCross = document.createElement('div');
+                deleteCross.className = 'delete-cross';
+                deleteCross.textContent = '×';
+                deleteCross.onclick = function(e) {
+                    e.stopPropagation();
+                    deleteIcon(this);
+                };
+                icon.appendChild(deleteCross);
+            }
+            
+            // 创建图标图片
+            const iconImage = document.createElement('div');
+            iconImage.className = 'icon-image';
+            
+            if (iconData.iconType === 'favicon' && iconData.faviconUrl) {
+                // 使用favicon图片
+                iconImage.style.backgroundImage = `url(${iconData.faviconUrl})`;
+                iconImage.style.backgroundSize = 'cover';
+                iconImage.style.backgroundPosition = 'center';
+                iconImage.style.backgroundRepeat = 'no-repeat';
+                iconImage.textContent = ''; // 清空文字内容
+                iconImage.setAttribute('data-favicon-url', iconData.faviconUrl);
+            } else {
+                // 使用emoji图标
+                iconImage.style.background = iconData.background;
+                iconImage.textContent = iconData.icon;
+            }
+            
+            // 创建标签
+            const iconLabel = document.createElement('div');
+            iconLabel.className = 'icon-label';
+            iconLabel.textContent = iconData.name;
+            
+            // 组装图标
+            icon.appendChild(iconImage);
+            icon.appendChild(iconLabel);
+            
+            // 设置位置
+            icon.style.left = iconData.left + 'px';
+            icon.style.top = iconData.top + 'px';
+            
+            return icon;
+        }
+
+        // 重置布局
+        function resetLayout() {
+            if (confirm('确定要重置所有图标位置吗？这将删除您的个性化设置。')) {
+                // 清除保存的配置
+                localStorage.removeItem('bookmarkDesktopConfig');
+                
+                // 重新加载页面显示默认配置
+                location.reload();
+            }
+        }
+
+        // 帮助
+        function help() {
+            alert(`使用说明：
+
+🖱️ 点击图标：打开网站（双击）
+🤏 长按/拖拽：移动图标位置
+📱 拖拽到切换点：跨屏幕移动图标
+← → 箭头键：切换屏幕
+➕ 按钮：添加新书签
+🔄 按钮：重置布局
+❓ 按钮：显示帮助`);
+        }
+    </script>
+</body>
+</html>
